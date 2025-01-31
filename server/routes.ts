@@ -14,21 +14,32 @@ export function registerRoutes(app: Express): Server {
     try {
       const { url } = urlSchema.parse(req.body);
 
-      // Launch headless browser with minimal configuration
+      // Launch browser with minimal configuration and additional flags
       const browser = await puppeteer.launch({ 
-        headless: 'new',
+        headless: true,
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
           '--disable-dev-shm-usage',
           '--disable-gpu',
-          '--no-zygote'
+          '--no-zygote',
+          '--single-process',
+          '--disable-extensions',
+          '--disable-features=site-per-process',
+          '--disable-software-rasterizer'
         ]
       });
 
       try {
         const page = await browser.newPage();
-        await page.goto(url, { waitUntil: 'networkidle0' });
+        // Set a reasonable viewport
+        await page.setViewport({ width: 1280, height: 800 });
+
+        // Navigate with a longer timeout and wait for network idle
+        await page.goto(url, { 
+          waitUntil: 'networkidle0',
+          timeout: 30000
+        });
 
         // Run accessibility tests
         const results = await new AxePuppeteer(page).analyze();
