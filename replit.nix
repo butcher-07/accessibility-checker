@@ -1,5 +1,6 @@
 {pkgs}: {
   deps = [
+    pkgs.atk
     pkgs.dbus
     pkgs.nspr
     pkgs.nss
