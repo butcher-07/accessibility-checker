@@ -89,7 +89,7 @@ async function analyzeUrl(url: string, browser: puppeteer.Browser) {
         category: violation.tags
           .filter((t: string) => !t.startsWith('wcag'))
           .join(', '),
-        sourceUrl: url // Include the source URL in the results
+        sourceUrl: url
       };
     });
 
@@ -99,8 +99,21 @@ async function analyzeUrl(url: string, browser: puppeteer.Browser) {
       .where(eq(urls.url, url));
 
     return { issues, linksFound: links.size };
+  } catch (error) {
+    console.error(`Error analyzing URL ${url}:`, error);
+    // Mark as processed even if it fails to avoid endless retries
+    await db.update(urls)
+      .set({ processed: true })
+      .where(eq(urls.url, url));
+    return { issues: [], linksFound: 0 };
   } finally {
-    await page.close();
+    try {
+      if (page && !page.isClosed()) {
+        await page.close();
+      }
+    } catch (e) {
+      console.error('Error closing page:', e);
+    }
   }
 }
 
@@ -151,11 +164,15 @@ export function registerRoutes(app: Express): Server {
         allIssues.push(...initialResults.issues);
         totalLinksFound += initialResults.linksFound;
 
-        // Process discovered links
+        // Process discovered links with a limit to avoid timeouts
         let nextResults;
-        while ((nextResults = await processNextUrl(domain, browser))) {
+        let processedCount = 0;
+        const MAX_URLS = 10; // Limit the number of URLs to process
+
+        while (processedCount < MAX_URLS && (nextResults = await processNextUrl(domain, browser))) {
           allIssues.push(...nextResults.issues);
           totalLinksFound += nextResults.linksFound;
+          processedCount++;
         }
 
         res.json({ 
@@ -167,7 +184,11 @@ export function registerRoutes(app: Express): Server {
         console.error('Error during page operations:', error);
         throw error;
       } finally {
-        await browser.close();
+        try {
+          await browser.close();
+        } catch (e) {
+          console.error('Error closing browser:', e);
+        }
       }
     } catch (error) {
       console.error('Error checking accessibility:', error);
@@ -188,8 +209,10 @@ export function registerRoutes(app: Express): Server {
       const pendingUrls = await db.select()
         .from(urls)
         .where(
-          eq(urls.domain, domain),
-          eq(urls.processed, false)
+          and(
+            eq(urls.domain, domain),
+            eq(urls.processed, false)
+          )
         );
 
       res.json({ pendingUrls });
