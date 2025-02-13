@@ -32,6 +32,7 @@ export default function UrlForm({ onResults }: UrlFormProps) {
   const [currentUrl, setCurrentUrl] = useState<string>("");
   const [totalProcessed, setTotalProcessed] = useState<number>(0);
   const [currentBatch, setCurrentBatch] = useState<number>(0);
+  const [ws, setWs] = useState<WebSocket | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -56,8 +57,8 @@ export default function UrlForm({ onResults }: UrlFormProps) {
       setCurrentBatch(0);
       onResults(data.issues, form.getValues("url"), data.processedUrls);
       toast({
-        title: "Analysis Complete",
-        description: `Found ${data.issues.length} accessibility issues across ${data.processedUrls.length} pages`,
+        title: data.cancelled ? "Analysis Cancelled" : "Analysis Complete",
+        description: `Found ${data.issues.length} accessibility issues across ${data.processedUrls.length} pages${data.cancelled ? ' (partial results)' : ''}`,
       });
     },
     onError: (error) => {
@@ -73,12 +74,22 @@ export default function UrlForm({ onResults }: UrlFormProps) {
     },
   });
 
+  const handleCancel = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: 'cancel' }));
+      toast({
+        title: "Cancelling...",
+        description: "Analysis will stop after the current batch completes.",
+      });
+    }
+  };
+
   useEffect(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
-    const ws = new WebSocket(wsUrl);
+    const newWs = new WebSocket(wsUrl);
 
-    ws.onmessage = (event) => {
+    newWs.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'processing') {
@@ -93,25 +104,18 @@ export default function UrlForm({ onResults }: UrlFormProps) {
       }
     };
 
-    ws.onerror = (error) => {
+    newWs.onerror = (error) => {
       console.error('WebSocket error:', error);
     };
 
+    setWs(newWs);
+
     return () => {
-      if (ws.readyState === WebSocket.OPEN) {
-        ws.close();
+      if (newWs.readyState === WebSocket.OPEN) {
+        newWs.close();
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (checkStep >= 0 && checkStep < 2) {
-      const timer = setTimeout(() => {
-        setCheckStep((prev) => prev + 1);
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [checkStep]);
 
   function onSubmit(values: z.infer<typeof formSchema>) {
     mutation.mutate(values);
@@ -132,16 +136,19 @@ export default function UrlForm({ onResults }: UrlFormProps) {
                     {...field}
                     className="flex-1"
                   />
-                  <Button type="submit" disabled={mutation.isPending}>
-                    {mutation.isPending ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Analyzing
-                      </>
-                    ) : (
-                      "Check Accessibility"
-                    )}
-                  </Button>
+                  {mutation.isPending ? (
+                    <Button 
+                      type="button" 
+                      variant="destructive"
+                      onClick={handleCancel}
+                    >
+                      Cancel
+                    </Button>
+                  ) : (
+                    <Button type="submit">
+                      Check Accessibility
+                    </Button>
+                  )}
                 </div>
               </FormControl>
               <FormMessage />

@@ -11,6 +11,8 @@ import { getDomain, isInternalLink, normalizeUrl } from "./utils";
 import WebSocket from 'ws';
 import { WebSocketServer } from 'ws';
 
+let isCancelled = false;
+
 const urlSchema = z.object({
   url: z.string().url()
 });
@@ -170,7 +172,7 @@ async function processUrlBatch(domain: string, startingBatch: number = 0): Promi
 
   for (let i = 0; i < BATCH_SIZE; i++) {
     const nextUrl = await getNextUnprocessedUrl(domain);
-    if (!nextUrl) break;
+    if (!nextUrl || isCancelled) break;
 
     try {
       const results = await analyzeUrl(nextUrl.url);
@@ -200,8 +202,23 @@ export function registerRoutes(app: Express): Server {
 
   app.locals.wss = wss;
 
+  wss.on('connection', (ws) => {
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        if (data.type === 'cancel') {
+          isCancelled = true;
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    });
+  });
+
   app.post("/api/check", async (req, res) => {
     try {
+      isCancelled = false;
+
       const { url } = urlSchema.parse(req.body);
       const domain = getDomain(url);
       let allIssues: any[] = [];
@@ -214,7 +231,7 @@ export function registerRoutes(app: Express): Server {
       let currentBatch = 0;
       let hasMore = true;
 
-      while (hasMore) {
+      while (hasMore && !isCancelled) {
         wss.clients.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ 
@@ -233,10 +250,14 @@ export function registerRoutes(app: Express): Server {
         currentBatch++;
       }
 
+      const wasCancelled = isCancelled;
+      isCancelled = false; 
+
       res.json({ 
         issues: allIssues,
         processedUrls: allProcessedUrls,
-        totalProcessed: allProcessedUrls.length
+        totalProcessed: allProcessedUrls.length,
+        cancelled: wasCancelled
       });
 
     } catch (error) {
