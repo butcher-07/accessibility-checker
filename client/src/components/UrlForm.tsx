@@ -29,6 +29,7 @@ interface UrlFormProps {
 export default function UrlForm({ onResults }: UrlFormProps) {
   const { toast } = useToast();
   const [checkStep, setCheckStep] = useState(-1);
+  const [pendingUrls, setPendingUrls] = useState<string[]>([]); // Added state for pending URLs
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -47,8 +48,16 @@ export default function UrlForm({ onResults }: UrlFormProps) {
       onResults(data.issues, form.getValues("url"));
       toast({
         title: "Analysis Complete",
-        description: `Found ${data.issues.length} accessibility issues`,
+        description: `Found ${data.issues.length} accessibility issues and ${data.linksFound} internal links`,
       });
+
+      // If links were found, show a toast with info about cascade checking
+      if (data.linksFound > 0) {
+        toast({
+          title: "Links Found",
+          description: `${data.linksFound} internal links have been stored for further analysis`,
+        });
+      }
     },
     onError: (error) => {
       setCheckStep(-1); // Reset progress
@@ -64,7 +73,7 @@ export default function UrlForm({ onResults }: UrlFormProps) {
   useEffect(() => {
     if (checkStep >= 0 && checkStep < 2) {
       const timer = setTimeout(() => {
-        setCheckStep(prev => prev + 1);
+        setCheckStep((prev) => prev + 1);
       }, 1000);
       return () => clearTimeout(timer);
     }
@@ -84,22 +93,19 @@ export default function UrlForm({ onResults }: UrlFormProps) {
             <FormItem>
               <FormControl>
                 <div className="flex gap-2">
-                  <Input 
-                    placeholder="Enter website URL (e.g., https://example.com)" 
+                  <Input
+                    placeholder="Enter website URL (e.g., https://example.com)"
                     {...field}
                     className="flex-1"
                   />
-                  <Button 
-                    type="submit" 
-                    disabled={mutation.isPending}
-                  >
+                  <Button type="submit" disabled={mutation.isPending}>
                     {mutation.isPending ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         Analyzing
                       </>
                     ) : (
-                      'Check Accessibility'
+                      "Check Accessibility"
                     )}
                   </Button>
                 </div>
