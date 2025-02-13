@@ -13,16 +13,33 @@ const urlSchema = z.object({
   url: z.string().url()
 });
 
-async function analyzeUrl(url: string, browser: puppeteer.Browser) {
+async function analyzeUrl(url: string) {
   console.log(`Analyzing URL: ${url}`);
   const domain = getDomain(url);
+
+  // Launch a new browser instance for each URL
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium',
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-zygote',
+      '--single-process',
+      '--disable-extensions'
+    ]
+  });
+
   const page = await browser.newPage();
 
   try {
     await page.setViewport({ width: 1280, height: 800 });
     await page.goto(url, { 
       waitUntil: 'networkidle0',
-      timeout: 30000
+      timeout: 15000 // Reduced timeout to fail faster
     });
 
     // Extract links
@@ -108,16 +125,19 @@ async function analyzeUrl(url: string, browser: puppeteer.Browser) {
     return { issues: [], linksFound: 0 };
   } finally {
     try {
-      if (page && !page.isClosed()) {
-        await page.close();
-      }
+      await page.close();
     } catch (e) {
       console.error('Error closing page:', e);
+    }
+    try {
+      await browser.close();
+    } catch (e) {
+      console.error('Error closing browser:', e);
     }
   }
 }
 
-async function processNextUrl(domain: string, browser: puppeteer.Browser) {
+async function getNextUnprocessedUrl(domain: string) {
   const [nextUrl] = await db.select()
     .from(urls)
     .where(
@@ -128,10 +148,7 @@ async function processNextUrl(domain: string, browser: puppeteer.Browser) {
     )
     .limit(1);
 
-  if (nextUrl) {
-    return await analyzeUrl(nextUrl.url, browser);
-  }
-  return null;
+  return nextUrl;
 }
 
 export function registerRoutes(app: Express): Server {
@@ -142,36 +159,23 @@ export function registerRoutes(app: Express): Server {
       let allIssues: any[] = [];
       let totalLinksFound = 0;
 
-      console.log('Launching browser with system Chromium...');
-      const browser = await puppeteer.launch({
-        headless: true,
-        executablePath: '/nix/store/zi4f80l169xlmivz8vja8wlphq74qqk0-chromium-125.0.6422.141/bin/chromium',
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--no-first-run',
-          '--no-zygote',
-          '--single-process',
-          '--disable-extensions'
-        ]
-      });
-
       try {
         // Analyze initial URL
-        const initialResults = await analyzeUrl(url, browser);
+        const initialResults = await analyzeUrl(url);
         allIssues.push(...initialResults.issues);
         totalLinksFound += initialResults.linksFound;
 
-        // Process discovered links with a limit to avoid timeouts
-        let nextResults;
+        // Process discovered links with a limit
         let processedCount = 0;
-        const MAX_URLS = 10; // Limit the number of URLs to process
+        const MAX_URLS = 5; // Reduced limit for better stability
 
-        while (processedCount < MAX_URLS && (nextResults = await processNextUrl(domain, browser))) {
-          allIssues.push(...nextResults.issues);
-          totalLinksFound += nextResults.linksFound;
+        while (processedCount < MAX_URLS) {
+          const nextUrl = await getNextUnprocessedUrl(domain);
+          if (!nextUrl) break;
+
+          const results = await analyzeUrl(nextUrl.url);
+          allIssues.push(...results.issues);
+          totalLinksFound += results.linksFound;
           processedCount++;
         }
 
@@ -183,12 +187,6 @@ export function registerRoutes(app: Express): Server {
       } catch (error) {
         console.error('Error during page operations:', error);
         throw error;
-      } finally {
-        try {
-          await browser.close();
-        } catch (e) {
-          console.error('Error closing browser:', e);
-        }
       }
     } catch (error) {
       console.error('Error checking accessibility:', error);
