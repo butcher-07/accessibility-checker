@@ -6,25 +6,128 @@ import puppeteer from 'puppeteer';
 import { z } from "zod";
 import { db } from "@db";
 import { urls } from "@db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { getDomain, isInternalLink, normalizeUrl } from "./utils";
 
 const urlSchema = z.object({
   url: z.string().url()
 });
 
+async function analyzeUrl(url: string, browser: puppeteer.Browser) {
+  console.log(`Analyzing URL: ${url}`);
+  const domain = getDomain(url);
+  const page = await browser.newPage();
+
+  try {
+    await page.setViewport({ width: 1280, height: 800 });
+    await page.goto(url, { 
+      waitUntil: 'networkidle0',
+      timeout: 30000
+    });
+
+    // Extract links
+    const content = await page.content();
+    const $ = cheerio.load(content);
+    const links = new Set<string>();
+
+    $('a').each((_, element) => {
+      const href = $(element).attr('href');
+      if (href) {
+        const normalizedUrl = normalizeUrl(href, url);
+        if (normalizedUrl && isInternalLink(normalizedUrl, domain)) {
+          links.add(normalizedUrl);
+        }
+      }
+    });
+
+    // Store new internal links
+    const linkArray = Array.from(links);
+    for (const link of linkArray) {
+      await db.insert(urls).values({
+        url: link,
+        parentUrl: url,
+        domain,
+        processed: false,
+      }).onConflictDoNothing();
+    }
+
+    // Run accessibility analysis
+    console.log('Running accessibility analysis...');
+    const results = await new AxePuppeteer(page).analyze();
+
+    // Transform results and include source URL
+    const issues = results.violations.map((violation: any) => {
+      const wcagTags = violation.tags
+        .filter((t: string) => t.startsWith('wcag'))
+        .map((tag: string) => {
+          try {
+            const parts = tag.split('.');
+            if (parts.length >= 3) {
+              const level = parts[1];
+              const criterion = parts[2];
+              return `WCAG ${level.toUpperCase()} ${criterion}`;
+            }
+            return tag;
+          } catch (error) {
+            console.error('Error parsing WCAG tag:', tag, error);
+            return tag;
+          }
+        })
+        .filter(Boolean)
+        .join(', ');
+
+      return {
+        code: violation.id,
+        type: 'error',
+        message: violation.help,
+        context: violation.nodes[0]?.html || '',
+        selector: violation.nodes[0]?.target[0] || '',
+        wcagCriteria: wcagTags || 'Not specified',
+        impact: violation.impact as 'critical' | 'serious' | 'moderate' | 'minor',
+        suggestion: violation.nodes[0]?.failureSummary || violation.description,
+        helpUrl: violation.helpUrl,
+        category: violation.tags
+          .filter((t: string) => !t.startsWith('wcag'))
+          .join(', '),
+        sourceUrl: url // Include the source URL in the results
+      };
+    });
+
+    // Mark current URL as processed
+    await db.update(urls)
+      .set({ processed: true })
+      .where(eq(urls.url, url));
+
+    return { issues, linksFound: links.size };
+  } finally {
+    await page.close();
+  }
+}
+
+async function processNextUrl(domain: string, browser: puppeteer.Browser) {
+  const [nextUrl] = await db.select()
+    .from(urls)
+    .where(
+      and(
+        eq(urls.domain, domain),
+        eq(urls.processed, false)
+      )
+    )
+    .limit(1);
+
+  if (nextUrl) {
+    return await analyzeUrl(nextUrl.url, browser);
+  }
+  return null;
+}
+
 export function registerRoutes(app: Express): Server {
   app.post("/api/check", async (req, res) => {
     try {
       const { url } = urlSchema.parse(req.body);
       const domain = getDomain(url);
-
-      // Store the initial URL if not exists
-      await db.insert(urls).values({
-        url,
-        domain,
-        processed: false,
-      }).onConflictDoNothing();
+      let allIssues: any[] = [];
+      let totalLinksFound = 0;
 
       console.log('Launching browser with system Chromium...');
       const browser = await puppeteer.launch({
@@ -43,94 +146,21 @@ export function registerRoutes(app: Express): Server {
       });
 
       try {
-        console.log('Creating new page...');
-        const page = await browser.newPage();
+        // Analyze initial URL
+        const initialResults = await analyzeUrl(url, browser);
+        allIssues.push(...initialResults.issues);
+        totalLinksFound += initialResults.linksFound;
 
-        console.log('Setting viewport...');
-        await page.setViewport({ width: 1280, height: 800 });
-
-        console.log(`Navigating to ${url}...`);
-        await page.goto(url, { 
-          waitUntil: 'networkidle0',
-          timeout: 30000
-        });
-
-        // Extract all links from the page
-        const content = await page.content();
-        const $ = cheerio.load(content);
-        const links = new Set<string>();
-
-        $('a').each((_, element) => {
-          const href = $(element).attr('href');
-          if (href) {
-            const normalizedUrl = normalizeUrl(href, url);
-            if (normalizedUrl && isInternalLink(normalizedUrl, domain)) {
-              links.add(normalizedUrl);
-            }
-          }
-        });
-
-        // Store new internal links
-        const linkArray = Array.from(links);
-        for (const link of linkArray) {
-          await db.insert(urls).values({
-            url: link,
-            parentUrl: url,
-            domain,
-            processed: false,
-          }).onConflictDoNothing();
+        // Process discovered links
+        let nextResults;
+        while ((nextResults = await processNextUrl(domain, browser))) {
+          allIssues.push(...nextResults.issues);
+          totalLinksFound += nextResults.linksFound;
         }
 
-        // Mark current URL as processed
-        await db.update(urls)
-          .set({ processed: true })
-          .where(eq(urls.url, url));
-
-        console.log('Running accessibility analysis...');
-        const results = await new AxePuppeteer(page).analyze();
-
-        // Transform results into our format with more WCAG details
-        const issues = results.violations.map((violation: any) => {
-          // Get detailed WCAG criteria info
-          const wcagTags = violation.tags
-            .filter((t: string) => t.startsWith('wcag'))
-            .map((tag: string) => {
-              try {
-                const parts = tag.split('.');
-                if (parts.length >= 3) {
-                  const level = parts[1];
-                  const criterion = parts[2];
-                  return `WCAG ${level.toUpperCase()} ${criterion}`;
-                }
-                return tag;
-              } catch (error) {
-                console.error('Error parsing WCAG tag:', tag, error);
-                return tag;
-              }
-            })
-            .filter(Boolean)
-            .join(', ');
-
-          return {
-            code: violation.id,
-            type: 'error',
-            message: violation.help,
-            context: violation.nodes[0]?.html || '',
-            selector: violation.nodes[0]?.target[0] || '',
-            wcagCriteria: wcagTags || 'Not specified',
-            impact: violation.impact as 'critical' | 'serious' | 'moderate' | 'minor',
-            suggestion: violation.nodes[0]?.failureSummary || violation.description,
-            helpUrl: violation.helpUrl,
-            category: violation.tags
-              .filter((t: string) => !t.startsWith('wcag'))
-              .join(', ')
-          };
-        });
-
-        // Return both the accessibility issues and the number of new links found
         res.json({ 
-          issues,
-          linksFound: links.size
+          issues: allIssues,
+          linksFound: totalLinksFound
         });
 
       } catch (error) {

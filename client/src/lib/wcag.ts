@@ -11,6 +11,7 @@ export interface AccessibilityIssue {
   suggestion: string;
   helpUrl?: string;
   category?: string;
+  sourceUrl: string;  // Added to track which URL this issue was found on
 }
 
 export interface AccessibilityResponse {

@@ -83,6 +83,11 @@ export default function AccessibilityResults({ issues, url }: AccessibilityResul
                           <h3 className={`font-semibold ${severityColors[issue.impact]}`}>
                             {issue.message}
                           </h3>
+                          {issue.sourceUrl !== url && (
+                            <p className="text-sm text-muted-foreground">
+                              Found on: {issue.sourceUrl}
+                            </p>
+                          )}
                         </div>
                         <Button
                           variant="outline" 
