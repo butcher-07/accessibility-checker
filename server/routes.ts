@@ -235,9 +235,8 @@ export function registerRoutes(app: Express): Server {
         wss.clients.forEach((client) => {
           if (client.readyState === WebSocket.OPEN) {
             client.send(JSON.stringify({ 
-              type: 'processing',
+              type: 'batch_start',
               currentBatch,
-              url: `Processing batch ${currentBatch + 1}`,
               totalProcessed: allProcessedUrls.length
             }));
           }

@@ -28,10 +28,11 @@ interface UrlFormProps {
 
 export default function UrlForm({ onResults }: UrlFormProps) {
   const { toast } = useToast();
-  const [checkStep, setCheckStep] = useState(-1);
-  const [currentUrl, setCurrentUrl] = useState<string>("");
-  const [totalProcessed, setTotalProcessed] = useState<number>(0);
-  const [currentBatch, setCurrentBatch] = useState<number>(0);
+  const [currentUrl, setCurrentUrl] = useState<string>();
+  const [totalProcessed, setTotalProcessed] = useState(0);
+  const [currentBatch, setCurrentBatch] = useState(0);
+  const [completedUrls, setCompletedUrls] = useState<string[]>([]);
+  const [status, setStatus] = useState<'analyzing' | 'completed' | 'batch_start'>('analyzing');
   const [ws, setWs] = useState<WebSocket | null>(null);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -42,36 +43,41 @@ export default function UrlForm({ onResults }: UrlFormProps) {
   });
 
   const mutation = useMutation({
-    mutationFn: async (values: z.infer<typeof formSchema>) => {
-      setCheckStep(0);
-      setCurrentUrl(values.url);
-      setTotalProcessed(0);
-      setCurrentBatch(0);
-      const res = await apiRequest("POST", "/api/check", values);
-      return res.json();
-    },
+    mutationFn: (data: { url: string }) => apiRequest('/api/check', {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' },
+    }),
     onSuccess: (data) => {
-      setCheckStep(-1);
-      setCurrentUrl("");
+      onResults(data.issues, data.url, data.processedUrls);
+      if (ws) {
+        ws.close();
+      }
+      // Reset state
+      setCurrentUrl(undefined);
       setTotalProcessed(0);
       setCurrentBatch(0);
-      onResults(data.issues, form.getValues("url"), data.processedUrls);
+      setCompletedUrls([]);
       toast({
         title: data.cancelled ? "Analysis Cancelled" : "Analysis Complete",
         description: `Found ${data.issues.length} accessibility issues across ${data.processedUrls.length} pages${data.cancelled ? ' (partial results)' : ''}`,
       });
     },
     onError: (error) => {
-      setCheckStep(-1);
-      setCurrentUrl("");
-      setTotalProcessed(0);
-      setCurrentBatch(0);
       toast({
         title: "Error",
         description: error.message,
         variant: "destructive",
       });
-    },
+      if (ws) {
+        ws.close();
+      }
+      // Reset state
+      setCurrentUrl(undefined);
+      setTotalProcessed(0);
+      setCurrentBatch(0);
+      setCompletedUrls([]);
+    }
   });
 
   const handleCancel = () => {
@@ -92,12 +98,17 @@ export default function UrlForm({ onResults }: UrlFormProps) {
     newWs.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        
         if (data.type === 'processing') {
           setCurrentUrl(data.url);
+          setStatus('analyzing');
+        } else if (data.type === 'completed') {
+          setCompletedUrls(prev => [...prev, data.url]);
+          setStatus('completed');
+        } else if (data.type === 'batch_start') {
+          setCurrentBatch(data.currentBatch);
           setTotalProcessed(data.totalProcessed);
-          if (data.currentBatch !== undefined) {
-            setCurrentBatch(data.currentBatch);
-          }
+          setStatus('batch_start');
         }
       } catch (error) {
         console.error('WebSocket message parsing error:', error);
@@ -155,12 +166,13 @@ export default function UrlForm({ onResults }: UrlFormProps) {
             </FormItem>
           )}
         />
-        {checkStep >= 0 && (
+        {mutation.isPending && (
           <CheckProgress 
-            currentStep={checkStep} 
             currentUrl={currentUrl}
             totalProcessed={totalProcessed}
             currentBatch={currentBatch}
+            completedUrls={completedUrls}
+            status={status}
           />
         )}
       </form>
