@@ -28,7 +28,10 @@
       "WebSearch",
       "Bash(wmic process where processid=45240 delete:*)",
       "Bash(wmic process where processid=118076 delete:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git remote add:*)",
+      "Bash(git push:*)"
     ],
     "deny": [],
     "ask": []
