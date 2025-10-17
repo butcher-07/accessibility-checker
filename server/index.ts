@@ -8,6 +8,13 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+// Add headers for Kontent.ai iframe embedding
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', 'frame-ancestors https://app.kontent.ai');
+  res.setHeader('X-Frame-Options', 'ALLOW-FROM https://app.kontent.ai');
+  next();
+});
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -43,6 +50,10 @@ app.use((req, res, next) => {
     // Test database connection with a simple query that won't cause circular reference issues
     await db.select({ count: urls.id }).from(urls).limit(1);
     log("Database connection successful");
+    
+    // Clear entire database on startup for fresh state
+    await db.delete(urls);
+    log("Database cleared on startup");
 
     const server = registerRoutes(app);
 
