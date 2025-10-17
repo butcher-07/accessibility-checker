@@ -72,7 +72,7 @@ The application consists of three main components:
    KONTENT_MANAGEMENT_API_KEY=your_api_key_here
    ```
 
-   Note: If using as a Kontent.ai custom app, the API key will be provided automatically.
+   **Note:** When using as a Kontent.ai custom app, the Management API key must be configured in the app settings with the key `KONTENT_AI_MANAGEMENT_API_KEY` (see Kontent.ai Custom App section below).
 
 ## Running the Application
 
