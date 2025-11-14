@@ -1,4 +1,4 @@
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { CheckCircle2, Loader2, ChevronDown, ChevronUp } from "lucide-react";
 import { useState } from "react";
 
@@ -99,23 +99,17 @@ export default function CheckProgress({
             </div>
 
             <div className={`space-y-1.5 ${showAllCompleted ? 'max-h-64 overflow-y-auto pr-2' : ''}`}>
-              <AnimatePresence mode="popLayout">
-                {displayedUrls.map((url, index) => (
-                  <motion.div
-                    key={`${url}-${index}`}
-                    initial={{ opacity: 0, x: -10 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -10 }}
-                    transition={{ duration: 0.2 }}
-                    className="flex items-start gap-2.5 text-sm py-2 px-3 rounded-md hover:bg-muted/50 transition-colors"
-                  >
-                    <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-muted-foreground break-all flex-1 text-sm">
-                      {url}
-                    </span>
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+              {displayedUrls.map((url, index) => (
+                <div
+                  key={`${url}-${index}`}
+                  className="flex items-start gap-2.5 text-sm py-2 px-3 rounded-md hover:bg-muted/50 transition-colors"
+                >
+                  <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0 mt-0.5" />
+                  <span className="text-muted-foreground break-all flex-1 text-sm">
+                    {url}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         )}
