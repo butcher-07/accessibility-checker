@@ -10,8 +10,7 @@
     "db:migrate": "tsx db/migrate.ts",
     "start": "npm run db:migrate && NODE_ENV=production tsx server/index.ts",
     "check": "tsc",
-    "db:push": "drizzle-kit push",
-    "heroku-postbuild": "npm run build"
+    "db:push": "drizzle-kit push"
   },
   "engines": {
     "node": "20.x",
