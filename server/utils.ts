@@ -22,7 +22,16 @@ export function normalizeUrl(url: string, baseUrl: string): string {
   try {
     // Handle relative URLs
     const parsed = new URL(url, baseUrl);
-    
+
+    // Normalize protocol: treat http and https the same by standardizing to https
+    // This ensures URLs like:
+    // - http://example.com/page
+    // - https://example.com/page
+    // Both become: https://example.com/page
+    if (parsed.protocol === 'http:') {
+      parsed.protocol = 'https:';
+    }
+
     // Remove query parameters and fragments for consistent processing
     // This ensures URLs like:
     // - https://example.com/page?param=1
@@ -31,13 +40,13 @@ export function normalizeUrl(url: string, baseUrl: string): string {
     // All become: https://example.com/page
     parsed.search = '';
     parsed.hash = '';
-    
+
     // Remove trailing slash for consistency unless it's the root path
     let normalizedUrl = parsed.href;
     if (normalizedUrl.endsWith('/') && parsed.pathname !== '/') {
       normalizedUrl = normalizedUrl.slice(0, -1);
     }
-    
+
     return normalizedUrl;
   } catch (e) {
     return '';
@@ -48,15 +57,22 @@ export function normalizeUrl(url: string, baseUrl: string): string {
 export function stripUrlParams(url: string): string {
   try {
     const parsed = new URL(url);
+
+    // Normalize protocol: treat http and https the same by standardizing to https
+    if (parsed.protocol === 'http:') {
+      parsed.protocol = 'https:';
+    }
+
+    // Remove query parameters and fragments
     parsed.search = '';
     parsed.hash = '';
-    
+
     // Remove trailing slash for consistency unless it's the root path
     let normalizedUrl = parsed.href;
     if (normalizedUrl.endsWith('/') && parsed.pathname !== '/') {
       normalizedUrl = normalizedUrl.slice(0, -1);
     }
-    
+
     return normalizedUrl;
   } catch (e) {
     return url; // Return original if parsing fails
