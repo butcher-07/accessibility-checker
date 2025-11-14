@@ -4,11 +4,20 @@ This guide covers deploying the Accessibility Scanner to free hosting platforms.
 
 ## Quick Deploy
 
-Click one of the buttons below to deploy with a single click:
+### Railway
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template/github?template=butcher-07/accessibility-checker)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new)
+
+Click the button above, then:
+1. Select "Deploy from GitHub repo"
+2. Choose `butcher-07/accessibility-checker`
+3. Railway will auto-detect the configuration and deploy
+
+### Render
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/butcher-07/accessibility-checker)
+
+Click the button to deploy directly from the `render.yaml` blueprint.
 
 ---
 
