@@ -19,25 +19,39 @@ export default function Home() {
         const { getCustomAppContext } = await import("@kontent-ai/custom-app-sdk");
         const context = await getCustomAppContext();
 
+        console.log('[Kontent.ai] Custom app context loaded:', {
+          hasConfig: !!context?.config,
+          hasEnvironmentId: !!(context as any)?.context?.environmentId
+        });
+
         // Extract Management API key from config
         const managementApiKey = context?.config?.KONTENT_AI_MANAGEMENT_API_KEY;
         if (managementApiKey) {
           setApiKey(managementApiKey);
+          console.log('[Kontent.ai] Management API key found');
+        } else {
+          console.warn('[Kontent.ai] No Management API key found in config');
         }
 
         // Get environment ID - it's nested at context.context.environmentId
         const envId = (context as any)?.context?.environmentId;
         if (envId) {
           setProjectId(envId);
+          console.log('[Kontent.ai] Environment ID found:', envId);
+        } else {
+          console.warn('[Kontent.ai] No environment ID found');
         }
       } catch (error) {
-        // Running standalone - this is expected and not an error
+        console.log('[Kontent.ai] Running in standalone mode (not in iframe)');
       }
     };
 
     // Only try to init if we're in an iframe
     if (window.self !== window.top) {
+      console.log('[Kontent.ai] Running in iframe - initializing custom app');
       initKontentApp();
+    } else {
+      console.log('[Kontent.ai] Running standalone - spaces dropdown will not be available');
     }
   }, []);
 

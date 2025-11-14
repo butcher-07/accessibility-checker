@@ -105,12 +105,15 @@ export default function UrlForm({ apiKey, projectId, onResults }: UrlFormProps) 
   const { data: spaces = [] } = useQuery<Space[]>({
     queryKey: ['/api/spaces', apiKey, projectId],
     queryFn: async () => {
+      console.log('[Spaces] Fetching spaces with:', { hasApiKey: !!apiKey, hasProjectId: !!projectId });
       const headers: Record<string, string> = {};
       if (apiKey) headers['x-kontent-api-key'] = apiKey;
       if (projectId) headers['x-kontent-project-id'] = projectId;
 
       const res = await apiRequest('GET', '/api/spaces', undefined, headers);
-      return res.json();
+      const data = await res.json();
+      console.log('[Spaces] Received spaces:', data);
+      return data;
     },
     enabled: !!apiKey && !!projectId,
   });
