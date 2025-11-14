@@ -4,7 +4,7 @@ A comprehensive web accessibility scanner that analyzes websites for WCAG compli
 
 ## Quick Deploy
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?template=https://github.com/butcher-07/accessibility-checker)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template/github?template=butcher-07/accessibility-checker)
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/butcher-07/accessibility-checker)
 
 ## Features
