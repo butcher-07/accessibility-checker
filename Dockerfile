@@ -39,10 +39,11 @@ RUN npm ci
 # Copy application files
 COPY . .
 
-# Build the application
+# Build the application (only builds client with Vite)
 RUN npm run build
 
 # Remove dev dependencies to reduce image size
+# Server runs with tsx (production dependency) so we can safely prune
 RUN npm prune --production
 
 # Expose port
