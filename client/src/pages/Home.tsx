@@ -17,41 +17,48 @@ export default function Home() {
       try {
         // Dynamically import the SDK to avoid issues in standalone mode
         const { getCustomAppContext } = await import("@kontent-ai/custom-app-sdk");
+
+        console.log('[Kontent.ai] Initializing SDK (works from any deployment - Railway, Render, etc.)');
         const context = await getCustomAppContext();
 
         console.log('[Kontent.ai] Custom app context loaded:', {
           hasConfig: !!context?.config,
-          hasEnvironmentId: !!(context as any)?.context?.environmentId
+          hasEnvironmentId: !!(context as any)?.context?.environmentId,
+          configKeys: context?.config ? Object.keys(context.config) : []
         });
 
         // Extract Management API key from config
         const managementApiKey = context?.config?.KONTENT_AI_MANAGEMENT_API_KEY;
         if (managementApiKey) {
           setApiKey(managementApiKey);
-          console.log('[Kontent.ai] Management API key found');
+          console.log('[Kontent.ai] ✓ Management API key found - spaces dropdown will be available');
         } else {
-          console.warn('[Kontent.ai] No Management API key found in config');
+          console.warn('[Kontent.ai] ✗ No Management API key found in config');
+          console.warn('[Kontent.ai] To enable spaces: Add KONTENT_AI_MANAGEMENT_API_KEY parameter in Kontent.ai custom app settings');
         }
 
         // Get environment ID - it's nested at context.context.environmentId
         const envId = (context as any)?.context?.environmentId;
         if (envId) {
           setProjectId(envId);
-          console.log('[Kontent.ai] Environment ID found:', envId);
+          console.log('[Kontent.ai] ✓ Environment ID found:', envId);
         } else {
-          console.warn('[Kontent.ai] No environment ID found');
+          console.warn('[Kontent.ai] ✗ No environment ID found');
         }
       } catch (error) {
-        console.log('[Kontent.ai] Running in standalone mode (not in iframe)');
+        console.error('[Kontent.ai] Failed to initialize custom app SDK:', error);
+        console.log('[Kontent.ai] This is expected when running standalone (not embedded in Kontent.ai)');
       }
     };
 
-    // Only try to init if we're in an iframe
+    // Check if we're in an iframe (embedded in Kontent.ai)
     if (window.self !== window.top) {
-      console.log('[Kontent.ai] Running in iframe - initializing custom app');
+      console.log('[Kontent.ai] Detected iframe context - will attempt to load Kontent.ai integration');
+      console.log('[Kontent.ai] This works regardless of deployment location (Railway, Render, Vercel, etc.)');
       initKontentApp();
     } else {
-      console.log('[Kontent.ai] Running standalone - spaces dropdown will not be available');
+      console.log('[Kontent.ai] Running standalone - Kontent.ai integration disabled');
+      console.log('[Kontent.ai] To use spaces: Deploy to Railway/Render and configure as Kontent.ai custom app');
     }
   }, []);
 
