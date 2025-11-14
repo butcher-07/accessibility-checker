@@ -4,10 +4,11 @@ A comprehensive web accessibility scanner that analyzes websites for WCAG compli
 
 ## Quick Deploy
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/github/butcher-07/accessibility-checker)
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy?referralCode=butcher-07)
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/butcher-07/accessibility-checker)
 
-Click a button above to deploy with one click! Both platforms auto-detect the configuration and deploy automatically.
+**Render**: One-click deploy from `render.yaml` blueprint
+**Railway**: Sign in → "Deploy from GitHub repo" → Select this repository
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed instructions.
 
