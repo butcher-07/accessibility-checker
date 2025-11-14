@@ -2,6 +2,11 @@
 
 A comprehensive web accessibility scanner that analyzes websites for WCAG compliance issues. Built with React, Express, and Puppeteer, featuring real-time progress tracking and Kontent.ai integration.
 
+## Quick Deploy
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/new?template=https://github.com/butcher-07/accessibility-checker)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/butcher-07/accessibility-checker)
+
 ## Features
 
 - 🔍 **Automated Accessibility Scanning** - Crawls websites and analyzes pages using Axe-core
