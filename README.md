@@ -284,7 +284,7 @@ To use as a Kontent.ai custom app:
 
 3. Set the app URL to your deployment
 
-For detailed setup instructions, see [KONTENT_AI_SETUP.md](./KONTENT_AI_SETUP.md)
+For detailed setup instructions, see [Kontent.ai's Custom App Documentation](https://kontent.ai/learn/docs/custom-apps)
 
 ### Database
 
